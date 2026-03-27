@@ -44,7 +44,7 @@ source venv/bin/activate
 ### Installare le librerie
 
 ```
-pip install "mcp>=1.6,<2" uvicorn pymupdf python-docx openpyxl
+pip install "mcp>=1.6,<2" uvicorn pymupdf python-docx openpyxl watchdog
 ```
 
 ### Salvare il codice del server
@@ -122,6 +122,7 @@ MCP_CLIENT_SECRET=incolla il testo generato in precedenza
 MCP_ALLOWED_HOST=mcp.a4x.it
 MCP_SSL_CERTFILE=/etc/letsencrypt/live/mcp.a4x.it/fullchain.pem
 MCP_SSL_KEYFILE=/etc/letsencrypt/live/mcp.a4x.it/privkey.pem
+MCP_DB_PATH=/opt/mcp-fileserver/mcp.db
 ```
 
 Proteggere il file:
