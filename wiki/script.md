@@ -1,29 +1,6 @@
+
+
 ``` python
-MCP File Server Aziendale
-
-Variabili d'ambiente richieste:
-  MCP_BASE_DIR        percorso della cartella documenti
-  MCP_CLIENT_ID       identificativo OAuth (es. mcp-aziendale)
-  MCP_CLIENT_SECRET   segreto OAuth (genera con: python3 -c "import secrets; print(secrets.token_hex(32))")
-  MCP_ALLOWED_HOST    dominio pubblico (es. mcp.tuaazienda.com)
-  MCP_SSL_CERTFILE    percorso al certificato SSL (fullchain.pem)
-  MCP_SSL_KEYFILE     percorso alla chiave privata SSL (privkey.pem)
-
-Variabili opzionali:
-  MCP_TOKEN_EXPIRY    durata token in secondi (default: 86400)
-  MCP_DB_PATH         percorso file SQLite (default: /opt/mcp-fileserver/mcp.db)
-
-Il database SQLite contiene:
-  - tokens           : token OAuth attivi (sopravvivono al riavvio del processo)
-  - file_index       : metadati dei file indicizzati (mtime, size)
-  - file_content     : indice full-text FTS5 per search_content
-
-All'avvio il server si mette in ascolto immediatamente; l'indicizzazione
-avviene in un thread separato senza bloccare le richieste. Un watcher in
-background (watchdog) mantiene l'indice aggiornato in tempo reale quando
-i file vengono aggiunti, modificati o cancellati.
-"""
-
 import os
 import secrets
 import sqlite3
@@ -42,7 +19,10 @@ from starlette.applications import Starlette
 from starlette.routing import Route, Mount
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response, RedirectResponse
-
+try:
+    import fitz as _fitz
+except ImportError:
+    _fitz = None
 # ---------------------------------------------------------------------------
 # LOGGING
 # ---------------------------------------------------------------------------
@@ -72,8 +52,8 @@ BASE_DIR            = _require_env("MCP_BASE_DIR")
 OAUTH_CLIENT_ID     = _require_env("MCP_CLIENT_ID")
 OAUTH_CLIENT_SECRET = _require_env("MCP_CLIENT_SECRET")
 ALLOWED_HOST        = _require_env("MCP_ALLOWED_HOST")
-SSL_CERTFILE        = _require_env("MCP_SSL_CERTFILE")
-SSL_KEYFILE         = _require_env("MCP_SSL_KEYFILE")
+
+
 TOKEN_EXPIRY        = int(os.environ.get("MCP_TOKEN_EXPIRY", "86400"))
 DB_PATH             = os.environ.get("MCP_DB_PATH", "/opt/mcp-fileserver/mcp.db")
 
@@ -658,17 +638,13 @@ def _risolvi_path(path: str) -> tuple[str, str | None]:
 
 
 def _estrai_testo(full_path: str, max_chars: int = 200_000) -> str:
-    """
-    Estrae il testo da un file (PDF, DOCX, XLSX, testo semplice).
-    Il troncamento a max_chars avviene internamente per evitare di
-    caricare in memoria file molto grandi prima di tagliarli.
-    """
     ext = Path(full_path).suffix.lower()
 
     if ext == ".pdf":
+        if _fitz is None:
+            return "[Errore: PyMuPDF non installato. Esegui: pip install pymupdf]"
         try:
-            import fitz
-            doc    = fitz.open(full_path)
+            doc = _fitz.open(full_path)
             pagine = []
             totale = 0
             for i, pagina in enumerate(doc, 1):
@@ -682,10 +658,30 @@ def _estrai_testo(full_path: str, max_chars: int = 200_000) -> str:
                     break
             doc.close()
             return "\n\n".join(pagine) if pagine else "[PDF senza testo estraibile: potrebbe essere scansionato]"
-        except fitz.FileDataError:
+        except _fitz.FileDataError:
             return "[PDF protetto da password o danneggiato: impossibile aprire il file]"
         except Exception as e:
             return f"[Errore lettura PDF: {e}]"
+
+    if ext == ".xls":
+        try:
+            import xlrd
+            wb = xlrd.open_workbook(full_path)
+            righe = []
+            totale = 0
+            for nome in wb.sheet_names():
+                foglio = wb.sheet_by_name(nome)
+                righe.append(f"=== Foglio: {nome} ===")
+                for i in range(foglio.nrows):
+                    r = "\t".join(str(foglio.cell_value(i, j)) for j in range(foglio.ncols))
+                    righe.append(r)
+                    totale += len(r)
+                    if totale >= max_chars:
+                        return "\n".join(righe)
+            return "\n".join(righe) if righe else "[File XLS vuoto]"
+        except Exception as e:
+            return f"[Errore lettura XLS: {e}]"
+
 
     if ext == ".docx":
         try:
@@ -1012,8 +1008,10 @@ def search_files(keyword: str) -> str:
     OUTPUT: elenco di percorsi relativi da passare direttamente a read_file.
     """
     results = []
-    for root, dirs, files in os.walk(BASE_DIR):
+	for root, dirs, files in os.walk(BASE_DIR):
         for nome in sorted(files):
+            if nome.startswith("~$"):
+                continue
             if keyword.lower() in nome.lower():
                 relativo = os.path.relpath(os.path.join(root, nome), BASE_DIR)
                 results.append(relativo)
@@ -1136,9 +1134,7 @@ if __name__ == "__main__":
 
     uvicorn.run(
         app,
-        host="0.0.0.0",
-        port=443,
-        ssl_certfile=SSL_CERTFILE,
-        ssl_keyfile=SSL_KEYFILE,
+        host="127.0.0.1",
+        port=8000,
     )
     ```

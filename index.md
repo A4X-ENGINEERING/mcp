@@ -44,7 +44,7 @@ source venv/bin/activate
 ### Installare le librerie
 
 ```
-pip install "mcp>=1.6,<2" uvicorn pymupdf python-docx openpyxl watchdog
+pip install "mcp>=1.6,<2" uvicorn pymupdf python-docx openpyxl watchdog xlrd
 ```
 
 ### Salvare il codice del server
