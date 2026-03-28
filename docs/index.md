@@ -1,7 +1,7 @@
 ---
 title: Guida creazione server MCP per documenti aziendali
 ---
-## Guida creazione server MCP per documenti aziendali
+## Guida creazione server MCP
 
 Un _[server MCP](wiki/mcp.md)_ (Model Context Protocol) permette a Claude di elencare tutti i file e le cartelle condivise in azienda e leggerne il contenuto (testo semplice, PDF, DOCX, XLSX)
 
